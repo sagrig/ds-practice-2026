@@ -16,16 +16,19 @@ from concurrent import futures
 class FraudService(fraud_detection_grpc.FraudServiceServicer):
     # Create an RPC function to say hello
     def CheckFraud(self, request, context):
+        print("Fraud Service request received:")
+        print(f"Card:         {request.card_number}")
+        print(f"Amount:       {request.order_amount}")
+
         response = fraud_detection.FraudResponse()
         if request.card_number.startswith("0000") or request.order_amount > 1000:
             response.is_fraud = True
         else:
             response.is_fraud = False
 
-        print(
-            f"Fraud check | Card: {request.card_number} | "
-            f"Amount: {request.order_amount} | Fraud: {response.is_fraud}"
-        )
+        print("Fraud Service response:")
+        print(f"Fraud result: {response.is_fraud}")        
+
         return response
 
 def serve():

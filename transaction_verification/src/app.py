@@ -14,12 +14,19 @@ import transaction_verification_pb2_grpc as tv_pb2_grpc
 class TransactionService(tv_pb2_grpc.TransactionServiceServicer):
 
     def VerifyTransaction(self, request, context):
+        print("Transaction verification request received:")
+        print(f"User:  {request.user}")
+        print(f"Items: {request.items}")
+
         response = tv_pb2.TransactionResponse()
 
         if request.items:
             response.valid = True
         else:
             response.valid = False
+
+        print("Transaction verification response:")
+        print(f"Valid: {response.valid}")
 
         return response
 

@@ -89,10 +89,8 @@ def index():
 
 @app.route('/checkout', methods=['POST'])
 def checkout():
-    """
-    Responds with a JSON object containing the order ID, status, and suggested books.
-    """
-    # Get request object data to json
+    print("Orchestrator received /checkout request.")
+    
     request_data = request.get_json()
 
     if not request_data:
@@ -116,6 +114,9 @@ def checkout():
         }
         return terms_error_response, 400
 
+    print("Orchestrator validated items and terms fields.")
+    print("Orchestrator spawns worker threads.")
+
     results = {}
     def fraud_worker():
         card_number = request_data.get("creditCard", {}).get("number", "")
@@ -131,7 +132,7 @@ def checkout():
         items = [item["name"] for item in request_data.get("items", [])]
         results["suggestions"] = get_suggestions(items)
     
-    fraud_thread = threading.Thread(target=fraud_worker)
+    fraud_thread       = threading.Thread(target=fraud_worker)
     transaction_thread = threading.Thread(target=transaction_worker)
     suggestions_thread = threading.Thread(target=suggestions_worker)
 
@@ -146,7 +147,7 @@ def checkout():
     if results.get("fraud"):
         status = "Order Rejected!"
         suggested_books = []
-    if not results.get("transaction_valid"):
+    elif not results.get("transaction_valid"):
         status = "Order Rejected!"
         suggested_books = []
     elif request_data.get("discountCode") == "INVALID":

@@ -16,6 +16,9 @@ class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
     def GetSuggestions(self, request, context):
         response = s_pb2.SuggestionsResponse()
 
+        print("Suggestions request received:")
+        print("Items: ", request.items)
+
         # Static book list
         books = [
             {"bookId": "101", "title": "Clean Code", "author": "Robert C. Martin"},
@@ -29,7 +32,9 @@ class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
             book.bookId = b["bookId"]
             book.title = b["title"]
             book.author = b["author"]
-
+        
+        print("Suggestions response:")
+        print(f"Suggestions book number: {len(response.books)}")
         return response
 
 
