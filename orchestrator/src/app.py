@@ -1,6 +1,8 @@
 import sys
 import os
 
+import threading
+
 # This set of lines are needed to import the gRPC stubs.
 # The path of the stubs is relative to the current file, or absolute inside the container.
 # Change these lines only if strictly needed.
@@ -51,21 +53,57 @@ def checkout():
     Responds with a JSON object containing the order ID, status, and suggested books.
     """
     # Get request object data to json
-    request_data = json.loads(request.data)
-    # Print request object data
-    print("Request Data:", request_data.get('items'))
+    request_data = request.get_json()
 
-    # Dummy response following the provided YAML specification for the bookstore
-    order_status_response = {
-        'orderId': '12345',
-        'status': 'Order Approved',
-        'suggestedBooks': [
-            {'bookId': '123', 'title': 'The Best Book', 'author': 'Author 1'},
-            {'bookId': '456', 'title': 'The Second Best Book', 'author': 'Author 2'}
-        ]
-    }
+    if not request_data:
+        norequest_error_response = {
+            "code": "400",
+            "message": "Invalid or empty JSON body."            
+        }
+        return norequest_error_response, 400
 
-    return order_status_response
+    if not request_data.get("items"):
+        items_error_response = {
+            "code": "400",
+            "message": "Order must contain at least one item."
+        }
+        return items_error_response, 400
+    
+    if not request_data.get("termsAndConditionsAccepted"):
+        terms_error_response = {
+            "code": "400",
+            "message": "Terms and Conditions must be accepted."
+        }
+        return terms_error_response, 400
+
+    results = {}
+    def fraud_worker():
+        results["fraud"] = greet("checkout")
+    
+    fraud_thread = threading.Thread(target=fraud_worker)
+    fraud_thread.start()
+    fraud_thread.join()
+
+    # simple approval logic
+    if request_data.get("discountCode") == "INVALID":
+        print("discountCode is INVALID")
+        order_status_response = {
+            "orderId": "12345",
+            "status": "Order Rejected",
+            "suggestedBooks": []
+        }
+    else:
+        print("discountCode is OK")
+        order_status_response = {
+            'orderId': '12345',
+            'status': 'Order Approved',
+            'suggestedBooks': [
+                {'bookId': '123', 'title': 'The Best Book', 'author': 'Author 1'},
+                {'bookId': '456', 'title': 'The Second Best Book', 'author': 'Author 2'}
+            ]
+        }
+
+    return order_status_response, 200
 
 
 if __name__ == '__main__':
