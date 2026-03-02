@@ -3,25 +3,71 @@ import os
 
 import threading
 
-# This set of lines are needed to import the gRPC stubs.
-# The path of the stubs is relative to the current file, or absolute inside the container.
-# Change these lines only if strictly needed.
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
+
+# fraud detextion gRPC
 fraud_detection_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/fraud_detection'))
 sys.path.insert(0, fraud_detection_grpc_path)
 import fraud_detection_pb2 as fraud_detection
 import fraud_detection_pb2_grpc as fraud_detection_grpc
 
+# transaction verification gRPC
+tv_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/transaction_verification'))
+sys.path.insert(0, tv_grpc_path)
+import transaction_verification_pb2 as tv_pb2
+import transaction_verification_pb2_grpc as tv_pb2_grpc
+
+# suggestions gRPC
+s_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/suggestions'))
+sys.path.insert(0, s_grpc_path)
+import suggestions_pb2 as s_pb2
+import suggestions_pb2_grpc as s_pb2_grpc
+
 import grpc
 
-def greet(name='you'):
+def verify_transaction(user, items):
+    with grpc.insecure_channel('transaction_verification:50052') as channel:
+        stub = tv_pb2_grpc.TransactionServiceStub(channel)
+
+        request = tv_pb2.TransactionRequest(
+            user=user,
+            items=items
+        )
+
+        response = stub.VerifyTransaction(request)
+    return response.valid
+
+def get_suggestions(items):
+    with grpc.insecure_channel('suggestions:50053') as channel:
+        stub = s_pb2_grpc.SuggestionsServiceStub(channel)
+
+        request = s_pb2.SuggestionsRequest(
+            items=items
+        )
+
+        response = stub.GetSuggestions(request)
+
+    books = []
+    for b in response.books:
+        books.append({
+            "bookId": b.bookId,
+            "title": b.title,
+            "author": b.author
+        })
+
+    return books
+
+def check_fraud(card_number, order_amount):
     # Establish a connection with the fraud-detection gRPC service.
     with grpc.insecure_channel('fraud_detection:50051') as channel:
-        # Create a stub object.
-        stub = fraud_detection_grpc.HelloServiceStub(channel)
-        # Call the service through the stub object.
-        response = stub.SayHello(fraud_detection.HelloRequest(name=name))
-    return response.greeting
+        stub = fraud_detection_grpc.FraudServiceStub(channel)
+        request = fraud_detection.FraudRequest(
+            card_number=card_number,
+            order_amount=order_amount
+        )
+
+        response = stub.CheckFraud(request)
+    return response.is_fraud
 
 # Import Flask.
 # Flask is a web framework for Python.
@@ -39,13 +85,7 @@ CORS(app, resources={r'/*': {'origins': '*'}})
 # Define a GET endpoint.
 @app.route('/', methods=['GET'])
 def index():
-    """
-    Responds with 'Hello, [name]' when a GET request is made to '/' endpoint.
-    """
-    # Test the fraud-detection gRPC service.
-    response = greet(name='orchestrator')
-    # Return the response.
-    return response
+    return "Orchestrator runs successfully!"
 
 @app.route('/checkout', methods=['POST'])
 def checkout():
@@ -78,30 +118,49 @@ def checkout():
 
     results = {}
     def fraud_worker():
-        results["fraud"] = greet("checkout")
+        card_number = request_data.get("creditCard", {}).get("number", "")
+        order_amount = float(len(request_data.get("items", [])) * 100)
+        results["fraud"] = check_fraud(card_number, order_amount)
+
+    def transaction_worker():
+        user = request_data.get("user", {}).get("name", "")
+        items = [item["name"] for item in request_data.get("items", [])]
+        results["transaction_valid"] = verify_transaction(user, items)
+
+    def suggestions_worker():
+        items = [item["name"] for item in request_data.get("items", [])]
+        results["suggestions"] = get_suggestions(items)
     
     fraud_thread = threading.Thread(target=fraud_worker)
-    fraud_thread.start()
-    fraud_thread.join()
+    transaction_thread = threading.Thread(target=transaction_worker)
+    suggestions_thread = threading.Thread(target=suggestions_worker)
 
-    # simple approval logic
-    if request_data.get("discountCode") == "INVALID":
-        print("discountCode is INVALID")
-        order_status_response = {
-            "orderId": "12345",
-            "status": "Order Rejected",
-            "suggestedBooks": []
-        }
-    else:
-        print("discountCode is OK")
-        order_status_response = {
-            'orderId': '12345',
-            'status': 'Order Approved',
-            'suggestedBooks': [
-                {'bookId': '123', 'title': 'The Best Book', 'author': 'Author 1'},
-                {'bookId': '456', 'title': 'The Second Best Book', 'author': 'Author 2'}
-            ]
-        }
+    fraud_thread.start()
+    transaction_thread.start()
+    suggestions_thread.start()
+
+    fraud_thread.join()
+    transaction_thread.join()
+    suggestions_thread.join()
+
+    if results.get("fraud"):
+        status = "Order Rejected!"
+        suggested_books = []
+    if not results.get("transaction_valid"):
+        status = "Order Rejected!"
+        suggested_books = []
+    elif request_data.get("discountCode") == "INVALID":
+        status = "Order Rejected"
+        suggested_books = []
+    else:        
+        status = "Order Approved."
+        suggested_books = results.get("suggestions", [])
+
+    order_status_response = {
+        'orderId':        '12345',
+        'status':         status,
+        'suggestedBooks': suggested_books
+    }
 
     return order_status_response, 200
 
