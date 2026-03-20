@@ -3,14 +3,29 @@ syntax = "proto3";
 package fraud_detection;
 
 service FraudService {
-    rpc CheckFraud (FraudRequest) returns (FraudResponse);
+    rpc InitOrder  (InitOrderRequest) returns (InitOrderResponse);
+    rpc CheckFraud (FraudRequest)     returns (FraudResponse);
+}
+
+message InitOrderRequest {
+    string             order_id           = 1;
+    string             card_number        = 2;
+    int32              order_amount_cents = 3;
+    map<string, int32> vector_clock       = 4;
+};
+
+message InitOrderResponse {
+    bool               ok           = 1;
+    string             message      = 2;
+    map<string, int32> vector_clock = 3;
 }
 
 message FraudRequest {
-    string card_number = 1;
-    float order_amount = 2;
+    string             order_id     = 1;
+    map<string, int32> vector_clock = 2;
 }
 
 message FraudResponse {
-	bool is_fraud = 1;
+	bool               is_fraud     = 1;
+    map<string, int32> vector_clock = 2;
 }
