@@ -14,17 +14,37 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x66raud_detection.proto\x12\x0f\x66raud_detection\"9\n\x0c\x46raudRequest\x12\x13\n\x0b\x63\x61rd_number\x18\x01 \x01(\t\x12\x14\n\x0corder_amount\x18\x02 \x01(\x02\"!\n\rFraudResponse\x12\x10\n\x08is_fraud\x18\x01 \x01(\x08\x32[\n\x0c\x46raudService\x12K\n\nCheckFraud\x12\x1d.fraud_detection.FraudRequest\x1a\x1e.fraud_detection.FraudResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x66raud_detection.proto\x12\x0f\x66raud_detection\"\xd3\x01\n\x10InitOrderRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12\x13\n\x0b\x63\x61rd_number\x18\x02 \x01(\t\x12\x1a\n\x12order_amount_cents\x18\x03 \x01(\x05\x12H\n\x0cvector_clock\x18\x04 \x03(\x0b\x32\x32.fraud_detection.InitOrderRequest.VectorClockEntry\x1a\x32\n\x10VectorClockEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"\xaf\x01\n\x11InitOrderResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12I\n\x0cvector_clock\x18\x03 \x03(\x0b\x32\x33.fraud_detection.InitOrderResponse.VectorClockEntry\x1a\x32\n\x10VectorClockEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"\x9a\x01\n\x0c\x46raudRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12\x44\n\x0cvector_clock\x18\x02 \x03(\x0b\x32..fraud_detection.FraudRequest.VectorClockEntry\x1a\x32\n\x10VectorClockEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"\x9c\x01\n\rFraudResponse\x12\x10\n\x08is_fraud\x18\x01 \x01(\x08\x12\x45\n\x0cvector_clock\x18\x02 \x03(\x0b\x32/.fraud_detection.FraudResponse.VectorClockEntry\x1a\x32\n\x10VectorClockEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\x32\xaf\x01\n\x0c\x46raudService\x12R\n\tInitOrder\x12!.fraud_detection.InitOrderRequest\x1a\".fraud_detection.InitOrderResponse\x12K\n\nCheckFraud\x12\x1d.fraud_detection.FraudRequest\x1a\x1e.fraud_detection.FraudResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'fraud_detection_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
-  _globals['_FRAUDREQUEST']._serialized_start=42
-  _globals['_FRAUDREQUEST']._serialized_end=99
-  _globals['_FRAUDRESPONSE']._serialized_start=101
-  _globals['_FRAUDRESPONSE']._serialized_end=134
-  _globals['_FRAUDSERVICE']._serialized_start=136
-  _globals['_FRAUDSERVICE']._serialized_end=227
+  _globals['_INITORDERREQUEST_VECTORCLOCKENTRY']._options = None
+  _globals['_INITORDERREQUEST_VECTORCLOCKENTRY']._serialized_options = b'8\001'
+  _globals['_INITORDERRESPONSE_VECTORCLOCKENTRY']._options = None
+  _globals['_INITORDERRESPONSE_VECTORCLOCKENTRY']._serialized_options = b'8\001'
+  _globals['_FRAUDREQUEST_VECTORCLOCKENTRY']._options = None
+  _globals['_FRAUDREQUEST_VECTORCLOCKENTRY']._serialized_options = b'8\001'
+  _globals['_FRAUDRESPONSE_VECTORCLOCKENTRY']._options = None
+  _globals['_FRAUDRESPONSE_VECTORCLOCKENTRY']._serialized_options = b'8\001'
+  _globals['_INITORDERREQUEST']._serialized_start=43
+  _globals['_INITORDERREQUEST']._serialized_end=254
+  _globals['_INITORDERREQUEST_VECTORCLOCKENTRY']._serialized_start=204
+  _globals['_INITORDERREQUEST_VECTORCLOCKENTRY']._serialized_end=254
+  _globals['_INITORDERRESPONSE']._serialized_start=257
+  _globals['_INITORDERRESPONSE']._serialized_end=432
+  _globals['_INITORDERRESPONSE_VECTORCLOCKENTRY']._serialized_start=204
+  _globals['_INITORDERRESPONSE_VECTORCLOCKENTRY']._serialized_end=254
+  _globals['_FRAUDREQUEST']._serialized_start=435
+  _globals['_FRAUDREQUEST']._serialized_end=589
+  _globals['_FRAUDREQUEST_VECTORCLOCKENTRY']._serialized_start=204
+  _globals['_FRAUDREQUEST_VECTORCLOCKENTRY']._serialized_end=254
+  _globals['_FRAUDRESPONSE']._serialized_start=592
+  _globals['_FRAUDRESPONSE']._serialized_end=748
+  _globals['_FRAUDRESPONSE_VECTORCLOCKENTRY']._serialized_start=204
+  _globals['_FRAUDRESPONSE_VECTORCLOCKENTRY']._serialized_end=254
+  _globals['_FRAUDSERVICE']._serialized_start=751
+  _globals['_FRAUDSERVICE']._serialized_end=926
 # @@protoc_insertion_point(module_scope)

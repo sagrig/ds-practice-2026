@@ -14,6 +14,11 @@ class TransactionServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.InitOrder = channel.unary_unary(
+                '/transaction_verification.TransactionService/InitOrder',
+                request_serializer=transaction__verification__pb2.InitOrderRequest.SerializeToString,
+                response_deserializer=transaction__verification__pb2.InitOrderResponse.FromString,
+                )
         self.VerifyTransaction = channel.unary_unary(
                 '/transaction_verification.TransactionService/VerifyTransaction',
                 request_serializer=transaction__verification__pb2.TransactionRequest.SerializeToString,
@@ -24,6 +29,12 @@ class TransactionServiceStub(object):
 class TransactionServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
+    def InitOrder(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def VerifyTransaction(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -33,6 +44,11 @@ class TransactionServiceServicer(object):
 
 def add_TransactionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'InitOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.InitOrder,
+                    request_deserializer=transaction__verification__pb2.InitOrderRequest.FromString,
+                    response_serializer=transaction__verification__pb2.InitOrderResponse.SerializeToString,
+            ),
             'VerifyTransaction': grpc.unary_unary_rpc_method_handler(
                     servicer.VerifyTransaction,
                     request_deserializer=transaction__verification__pb2.TransactionRequest.FromString,
@@ -47,6 +63,23 @@ def add_TransactionServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class TransactionService(object):
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def InitOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/transaction_verification.TransactionService/InitOrder',
+            transaction__verification__pb2.InitOrderRequest.SerializeToString,
+            transaction__verification__pb2.InitOrderResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
     def VerifyTransaction(request,

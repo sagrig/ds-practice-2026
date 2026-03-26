@@ -43,7 +43,7 @@ class TransactionService(tv_pb2_grpc.TransactionServiceServicer):
         clock_input = dict(request.vector_clock)
 
         with LOCK:
-            local_clock = merge_clock(zero_clock(), clock_input)
+            local_clock = merge_clock(zero_clocks(), clock_input)
             local_clock = tick(local_clock, THIS_NODE)
 
             ORDERS[request.order_id] = {
@@ -72,7 +72,7 @@ class TransactionService(tv_pb2_grpc.TransactionServiceServicer):
                 response = tv_pb2.TransactionResponse(
                     valid = False
                 )
-                response.vector_clock.update(zero_clock())
+                response.vector_clock.update(zero_clocks())
                 return response
 
             order_state = ORDERS[request.order_id]
