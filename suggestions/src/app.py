@@ -80,7 +80,7 @@ class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
             order_state["vector_clock"] = local_clock
 
             items = order_state["items"]  
-        print("INFO: Cached items: {items}")
+        print(f"INFO: Cached items: {items}")
 
         # static book list
         books = [

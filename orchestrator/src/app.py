@@ -73,7 +73,7 @@ def init_fraud(order_id, card_number, order_amount_cents, vector_clock):
         stub    = fraud_detection_grpc.FraudServiceStub(channel)
         request = fraud_detection.InitOrderRequest(
             order_id           = order_id,
-            card_number        = card_number, 
+            card_number        = card_number,
             order_amount_cents = order_amount_cents
         )
         request.vector_clock.update(vector_clock)
@@ -86,8 +86,8 @@ def verify_transaction(order_id, vector_clock):
     with grpc.insecure_channel('transaction_verification:50052') as channel:
         stub    = tv_pb2_grpc.TransactionServiceStub(channel)
         request = tv_pb2.TransactionRequest(
-            order_id     = order_id
-        )   
+            order_id = order_id
+        )
         request.vector_clock.update(vector_clock)
 
         response = stub.VerifyTransaction(request)
@@ -118,7 +118,6 @@ def get_suggestions(order_id, vector_clock):
     }
 
 def check_fraud(order_id, vector_clock):
-    # Establish a connection with the fraud-detection gRPC service.
     with grpc.insecure_channel('fraud_detection:50051') as channel:
         stub = fraud_detection_grpc.FraudServiceStub(channel)
 
@@ -133,16 +132,13 @@ def check_fraud(order_id, vector_clock):
         "vector_clock": dict(response.vector_clock)
     }
 
-# -- FLASK -- 
+# -- FLASK --
 from flask import Flask, request
 from flask_cors import CORS
 
-# Create a simple Flask app.
 app = Flask(__name__)
-# Enable CORS for the app.
 CORS(app, resources={r'/*': {'origins': '*'}})
 
-# Define a GET endpoint.
 @app.route('/', methods=['GET'])
 def index():
     return "INFO: Orchestrator runs successfully!"
@@ -150,32 +146,31 @@ def index():
 @app.route('/checkout', methods=['POST'])
 def checkout():
     print("INFO: Orchestrator received /checkout request.")
-    
+
     request_data = request.get_json()
 
     if not request_data:
         norequest_error_response = {
-            "code": "400",
-            "message": "Invalid or empty JSON body."            
+            "code":    "400",
+            "message": "Invalid or empty JSON body."
         }
         return norequest_error_response, 400
 
     if not request_data.get("items"):
         items_error_response = {
-            "code": "400",
+            "code":    "400",
             "message": "Order must contain at least one item."
         }
         return items_error_response, 400
-    
+
     if not request_data.get("termsAndConditionsAccepted"):
         terms_error_response = {
-            "code": "400",
+            "code":    "400",
             "message": "Terms and Conditions must be accepted."
         }
         return terms_error_response, 400
 
     print("INFO: Orchestrator validated items and terms fields.")
-    print("INFO: Orchestrator spawns worker threads.")
 
     # extracting order info
     order_id           = str(uuid.uuid4())
@@ -183,135 +178,184 @@ def checkout():
     user               = request_data.get("user", {}).get("name", "")
     card_number        = request_data.get("creditCard", {}).get("number", "")
     order_amount_cents = len(request_data.get("items", [])) * 100
-
-    # initial orchestrator event
-    global_clock = zero_clocks();
-    global_clock = tick(global_clock, "orchestrator")
+    invalid_disc       = (request_data.get("discountCode") == "INVALID")
 
     print(f"INFO: Generated Order ID: {order_id}")
-    print("INFO: Orchestrator starts initialisation of all services.")
 
-    init_results = {}
-    init_errors  = []
+    global_clock = zero_clocks()
+
+    # stage 1: a || b
+    stage1_results = {}
+    stage1_errors  = []
+
+    clock_for_a = tick(global_clock, "orchestrator")
+    clock_for_b = tick(clock_for_a, "orchestrator")
 
     def transaction_init_worker():
         try:
-            init_results["transaction"] = init_transaction(order_id, 
-                                                           user, 
-                                                           items, 
-                                                           global_clock)
+            stage1_results["a"] = init_transaction(order_id, user, items, clock_for_a)
         except Exception as e:
-            init_errors.append(f"ERROR: Transaction init failed: {e}")
-    
-    def suggestions_init_worker():
-        try:
-            init_results["suggestions"] = init_suggestions(order_id, 
-                                                           items, 
-                                                           global_clock)
-        except Exception as e:
-            init_errors.append(f"ERROR: Suggestions init failed: {e}")
+            stage1_errors.append(f"ERROR: Event a failed: {e}")
 
     def fraud_init_worker():
         try:
-            init_results["fraud"]       = init_fraud(order_id, 
-                                                     card_number,
-                                                     order_amount_cents,
-                                                     global_clock)
+            stage1_results["b"] = init_fraud(order_id, card_number, order_amount_cents, clock_for_b)
         except Exception as e:
-            init_errors.append(f"ERROR: Fraud init failed: {e}")
+            stage1_errors.append(f"ERROR: Event b failed: {e}")
 
-    tr_init_thread = threading.Thread(target=transaction_init_worker)
-    sg_init_thread = threading.Thread(target=suggestions_init_worker)
-    fr_init_thread = threading.Thread(target=fraud_init_worker)
+    # a = transaction_init
+    a_thread = threading.Thread(target=transaction_init_worker)
+    # b = fraud_init 
+    b_thread = threading.Thread(target=fraud_init_worker)
 
-    tr_init_thread.start()
-    sg_init_thread.start()
-    fr_init_thread.start()
+    a_thread.start()
+    b_thread.start()
 
-    tr_init_thread.join()
-    sg_init_thread.join()
-    fr_init_thread.join()
+    a_thread.join()
+    b_thread.join()
 
-    if init_errors:
-        print("ERROR: initialisation process has failed.")
-        init_error_response = {
+    if stage1_errors:
+        return {
             "code":    "500",
-            "message": "initialisation failed",
-            "details": init_errors
-        }
-        return init_error_response, 500
+            "message": "Stage 1 failed.",
+            "details": stage1_errors
+        }, 500
 
-    for response in init_results.values():
-        global_clock = merge_clock(global_clock, dict(response.vector_clock))
-
-    print("INFO: initialisation process has successfully completed.")
-    print("INFO: orchestrator starts actual verification.")
-
-    run_results = {}
-    run_errors  = []
-
-    def transaction_worker():
-        try:
-            run_results["transaction"] = verify_transaction(order_id,
-                                                            global_clock)
-        except Exception as e:
-            run_errors.append(f"ERROR: transaction verification worker failed: {e}")
-    
-    def fraud_worker():
-        try:
-            run_results["fraud"] = check_fraud(order_id,
-                                               global_clock)
-        except Exception as e:
-            run_errors.append(f"ERROR: fraud checking worker failed: {e}")
-    
-    tr_thread = threading.Thread(target=transaction_worker)
-    fr_thread = threading.Thread(target=fraud_worker)
-
-    tr_thread.start()
-    fr_thread.start()    
-
-    tr_thread.join()
-    fr_thread.join()    
-
-    if run_errors:
-        print("ERROR: one or more of gRPC workers failed.")
-        run_error_response = {
+    if "a" not in stage1_results or "b" not in stage1_results:
+        return {
             "code":    "500",
-            "message": "One or more gRPC workers failed.",
-            "details": run_errors
-        }
-        return run_error_response, 500
-    
-    tr_response  = run_results["transaction"]
-    fr_response  = run_results["fraud"]
+            "message": "Stage 1 failed."
+        }, 500
 
-    global_clock = merge_clock(global_clock, dict(tr_response.vector_clock))
-    global_clock = merge_clock(global_clock, fr_response["vector_clock"])
+    if not stage1_results["a"].ok or not stage1_results["b"].ok:
+        return {
+            "orderId":        order_id,
+            "status":         "Order Rejected!",
+            "suggestedBooks": []
+        }, 200
 
-    is_fraud     = fr_response["is_fraud"]
-    tr_valid     = tr_response.valid
-    invalid_disc = (request_data.get("discountCode") == "INVALID")
+    clock_a = dict(stage1_results["a"].vector_clock)
+    clock_b = dict(stage1_results["b"].vector_clock)
 
-    if is_fraud or not tr_valid or invalid_disc:
-        status       = "Order Rejected!"
-        sug_books    = []
-    else:
-        sugg_resp    = get_suggestions(order_id, global_clock)
-        global_clock = merge_clock(global_clock, sugg_resp["vector_clock"])
-        status       = "Order Approved."
-        sug_books    = sugg_resp["books"]
-    
+    global_clock = merge_clock(global_clock, clock_a)
+    global_clock = merge_clock(global_clock, clock_b)
+
+    # c || d (both after a)
+    stage2_results = {}
+    stage2_errors  = []
+
+    clock_after_a = merge_clock(global_clock, clock_a)
+    clock_for_c   = tick(clock_after_a, "orchestrator")
+    clock_for_d   = tick(clock_for_c, "orchestrator")
+
+    def suggestions_init_worker():
+        try:
+            stage2_results["c"] = init_suggestions(order_id, items, clock_for_c)
+        except Exception as e:
+            stage2_errors.append(f"ERROR: Event c failed: {e}")
+
+    def transaction_verify_worker():
+        try:
+            stage2_results["d"] = verify_transaction(order_id, clock_for_d)
+        except Exception as e:
+            stage2_errors.append(f"ERROR: Event d failed: {e}")
+
+    # c = suggestions_init
+    c_thread = threading.Thread(target=suggestions_init_worker)
+    # d = transaction_verify
+    d_thread = threading.Thread(target=transaction_verify_worker)
+
+    c_thread.start()
+    d_thread.start()
+
+    c_thread.join()
+    d_thread.join()
+
+    if stage2_errors:
+        return {
+            "code":    "500",
+            "message": "Stage 2 failed.",
+            "details": stage2_errors
+        }, 500
+
+    if "c" not in stage2_results or "d" not in stage2_results:
+        return {
+            "code":    "500",
+            "message": "Stage 2 failed."
+        }, 500
+
+    if not stage2_results["c"].ok:
+        return {
+            "code":    "500",
+            "message": "Suggestions Initialisation event failed."
+        }, 500
+
+    clock_c = dict(stage2_results["c"].vector_clock)
+    clock_d = dict(stage2_results["d"].vector_clock)
+
+    global_clock = merge_clock(global_clock, clock_c)
+    global_clock = merge_clock(global_clock, clock_d)
+
+    tr_valid = stage2_results["d"].valid
+
+    if not tr_valid or invalid_disc:
+        return {
+            "orderId":        order_id,
+            "status":         "Order Rejected!",
+            "suggestedBooks": []
+        }, 200
+
+    # e (after b and d)
+    clock_for_e = merge_clock(clock_b, clock_d)
+    clock_for_e = merge_clock(clock_for_e, global_clock)
+    clock_for_e = tick(clock_for_e, "orchestrator")
+
+    # e = check_fraud
+    try:
+        e_result = check_fraud(order_id, clock_for_e)
+    except Exception as e:
+        return {
+            "code":    "500",
+            "message": "Event e failed.",
+            "details": str(e)
+        }, 500
+
+    clock_e      = e_result["vector_clock"]
+    global_clock = merge_clock(global_clock, clock_e)
+
+    is_fraud = e_result["is_fraud"]
+    if is_fraud:
+        return {
+            "orderId":        order_id,
+            "status":         "Order Rejected!",
+            "suggestedBooks": []
+        }, 200
+
+    # f (after c and e)
+    clock_for_f = merge_clock(clock_c, clock_e)
+    clock_for_f = merge_clock(clock_for_f, global_clock)
+    clock_for_f = tick(clock_for_f, "orchestrator")
+
+    # f = get_suggestions
+    try:
+        f_result = get_suggestions(order_id, clock_for_f)
+    except Exception as e:
+        return {
+            "code":    "500",
+            "message": "Event f failed.",
+            "details": str(e)
+        }, 500
+
+    global_clock = merge_clock(global_clock, f_result["vector_clock"])
+
     order_status_response = {
         "orderId":        order_id,
-        "status":         status,
-        "suggestedBooks": sug_books
+        "status":         "Order Approved.",
+        "suggestedBooks": f_result["books"]
     }
 
     return order_status_response, 200
 
 
 if __name__ == '__main__':
-    # Run the app in debug mode to enable hot reloading.
-    # This is useful for development.
-    # The default port is 5000.
     app.run(host='0.0.0.0')
