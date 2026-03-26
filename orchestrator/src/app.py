@@ -145,11 +145,11 @@ CORS(app, resources={r'/*': {'origins': '*'}})
 # Define a GET endpoint.
 @app.route('/', methods=['GET'])
 def index():
-    return "Orchestrator runs successfully!"
+    return "INFO: Orchestrator runs successfully!"
 
 @app.route('/checkout', methods=['POST'])
 def checkout():
-    print("Orchestrator received /checkout request.")
+    print("INFO: Orchestrator received /checkout request.")
     
     request_data = request.get_json()
 
