@@ -92,31 +92,34 @@
             const formData = new FormData(event.target);
             const data = {
                 user: {
-                    name: formData.get('name'),
+                    name:    formData.get('name'),
                     contact: formData.get('contact'),
                 },
                 creditCard: {
-                    number: formData.get('creditCard'),
+                    number:         formData.get('creditCard'),
                     expirationDate: formData.get('expirationDate'),
-                    cvv: formData.get('cvv'),
+                    cvv:            formData.get('cvv'),
                 },
                 userComment: formData.get('userComment'),
-                items: items,
+                items:       items,
                 billingAddress: {
-                    street: formData.get('billingStreet'),
-                    city: formData.get('billingCity'),
-                    state: formData.get('billingState'),
-                    zip: formData.get('billingZip'),
+                    street:  formData.get('billingStreet'),
+                    city:    formData.get('billingCity'),
+                    state:   formData.get('billingState'),
+                    zip:     formData.get('billingZip'),
                     country: formData.get('billingCountry'),
                 },
-                shippingMethod: formData.get('shippingMethod'),
-                giftWrapping: formData.get('giftWrapping') === 'on',
-                termsAccepted: formData.get('terms') === 'on',
+                shippingMethod:             formData.get('shippingMethod'),
+                giftWrapping:               formData.get('giftWrapping') === 'on',
+                termsAndConditionsAccepted: formData.get('terms') === 'on',
             };
 
             try {
                 const response = await fetch('http://localhost:8081/checkout', {
                     method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
                     body: JSON.stringify(data),
                 });
 
@@ -124,20 +127,22 @@
                 const responseDiv = document.getElementById('response');
 
                 if (response.ok) {
-                    const suggestedBooks = result.suggestedBooks.map(book => `<li>${book.title} by ${book.author}</li>`).join('');
+                    const suggestedBooks = (result.suggestedBooks || [])
+                        .map(book => `<li>${book.title} by ${book.author}</li>`)
+                        .join('');
                     responseDiv.innerHTML = `
                         <strong>Order status: ${result.status}</strong><br>
                         Order ID: ${result.orderId}<br>
-                        ${result.status === "Order Approved" ?
+                        ${result.status === "Order Approved."?
                             `Suggested Books:
-                            <ul class="list-disc pl-5 mt-2 space-y-1">${suggestedBooks}</ul>`
-                        : ``
+                            <ul class="list-disc pl-5 mt-2 space-y-1">${suggestedBooks}</ul>`: 
+                            ``
                         }
                     `;
-                    color = result.status === 'Order Approved' ? 'green' : 'red';
+                    color = result.status === 'Order Approved.' ? 'green' : 'red';
                     responseDiv.className = `mt-6 p-4 border rounded-lg bg-${color}-100 text-${color}-700`;
                 } else {
-                    responseDiv.textContent = `Error: ${result.error.message}`;
+                    responseDiv.textContent = `Error: ${result.message || 'Unknown error'}`;
                     responseDiv.className = "mt-6 p-4 border rounded-lg bg-red-100 text-red-700";
                 }
 
