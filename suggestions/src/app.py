@@ -11,7 +11,7 @@ sys.path.insert(0, grpc_path)
 import suggestions_pb2 as s_pb2
 import suggestions_pb2_grpc as s_pb2_grpc
 
-NODES     = ["orchestrator", "transaction", "fraud", "suggestions"]
+NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
 THIS_NODE = "suggestions"
 
 ORDERS    = {}

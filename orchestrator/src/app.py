@@ -26,7 +26,8 @@ import suggestions_pb2_grpc as s_pb2_grpc
 import grpc
 
 # -- VECTOR CLOCK API --
-NODES = ["orchestrator", "transaction", "fraud", "suggestions"]
+NODES = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
+THIS_NODE = "orchestrator"
 
 def zero_clocks():
     return {node: 0 for node in NODES}
@@ -188,8 +189,8 @@ def checkout():
     stage1_results = {}
     stage1_errors  = []
 
-    clock_for_a = tick(global_clock, "orchestrator")
-    clock_for_b = tick(clock_for_a, "orchestrator")
+    clock_for_a = tick(global_clock, THIS_NODE)
+    clock_for_b = tick(clock_for_a,  THIS_NODE)
 
     def transaction_init_worker():
         try:

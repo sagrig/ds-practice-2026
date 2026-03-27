@@ -11,7 +11,7 @@ sys.path.insert(0, grpc_path)
 import transaction_verification_pb2      as tv_pb2
 import transaction_verification_pb2_grpc as tv_pb2_grpc
 
-NODES     = ["orchestrator", "transaction", "fraud", "suggestions"]
+NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
 THIS_NODE = "transaction"
 
 ORDERS    = {}
