@@ -15,7 +15,7 @@ sys.path.insert(0, order_queue_grpc_path)
 import order_queue_pb2      as order_queue
 import order_queue_pb2_grpc as order_queue_grpc
 
-NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
+NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue", "order_executor"]
 THIS_NODE = "order_queue"
 
 QUEUE     = deque()

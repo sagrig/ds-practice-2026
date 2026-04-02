@@ -20,6 +20,14 @@ docker compose up
 
 This will start the system with the multiple services. Each service will be restarted automatically when you make changes to the code, so you don't have to restart the system manually while developing. If you want to know how the services are started and configured, check the `docker-compose.yaml` file.
 
+To run the replicated order executor with Raft-style leader election, scale it explicitly:
+
+```bash
+docker compose up --build --scale order_executor=3
+```
+
+You can increase this to `4`, `5`, etc. The replicas discover each other through Docker Compose DNS, elect a single leader, and only that leader dequeues from `order_queue`. For fault tolerance, use at least `3` replicas, because a 2-node Raft cluster cannot keep quorum after one node fails.
+
 The checkpoint evaluations will be done using the code that is started with Docker Compose, so make sure that your code works with Docker Compose.
 
 If, for some reason, changes to the code are not reflected, try to force rebuilding the Docker images with the following command:

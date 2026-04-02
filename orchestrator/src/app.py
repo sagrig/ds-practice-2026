@@ -23,10 +23,16 @@ sys.path.insert(0, s_grpc_path)
 import suggestions_pb2      as s_pb2
 import suggestions_pb2_grpc as s_pb2_grpc
 
+# order queue gRPC
+order_queue_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/order_queue'))
+sys.path.insert(0, order_queue_grpc_path)
+import order_queue_pb2      as order_queue_pb2
+import order_queue_pb2_grpc as order_queue_pb2_grpc
+
 import grpc
 
 # -- VECTOR CLOCK API --
-NODES = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
+NODES = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue", "order_executor"]
 THIS_NODE = "orchestrator"
 
 def zero_clocks():
@@ -132,6 +138,19 @@ def check_fraud(order_id, vector_clock):
         "is_fraud":     response.is_fraud,
         "vector_clock": dict(response.vector_clock)
     }
+
+
+def enqueue_order(order_id, user, items, vector_clock):
+    with grpc.insecure_channel('order_queue:50054') as channel:
+        stub = order_queue_pb2_grpc.OrderQueueServiceStub(channel)
+        request = order_queue_pb2.EnqueueRequest(
+            order_id=order_id,
+            user=user,
+            items=items,
+        )
+        request.vector_clock.update(vector_clock)
+        response = stub.Enqueue(request)
+    return response
 
 # -- FLASK --
 from flask import Flask, request
@@ -348,6 +367,18 @@ def checkout():
         }, 500
 
     global_clock = merge_clock(global_clock, f_result["vector_clock"])
+
+    clock_for_queue = tick(global_clock, THIS_NODE)
+    try:
+        queue_response = enqueue_order(order_id, user, items, clock_for_queue)
+    except Exception as e:
+        return {
+            "code":    "500",
+            "message": "Queue enqueue failed.",
+            "details": str(e)
+        }, 500
+
+    global_clock = merge_clock(global_clock, dict(queue_response.vector_clock))
 
     order_status_response = {
         "orderId":        order_id,

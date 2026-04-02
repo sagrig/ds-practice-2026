@@ -1,4 +1,4 @@
-version: '3'
+name: ds-practice-2026
 services:
   frontend:
     build:
@@ -100,3 +100,21 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./order_queue/src:/app/order_queue/src
+  order_executor:
+    build:
+      context: ./
+      dockerfile: ./order_executor/Dockerfile
+    expose:
+      - "50055"
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/order_executor/src/app.py
+      - ORDER_QUEUE_HOST=order_queue
+      - ORDER_QUEUE_PORT=50054
+      - ORDER_EXECUTOR_SERVICE_NAME=order_executor
+      - ORDER_EXECUTOR_PORT=50055
+    volumes:
+      - ./utils:/app/utils
+      - ./order_executor/src:/app/order_executor/src
+    depends_on:
+      - order_queue

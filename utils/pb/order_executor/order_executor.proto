@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package order_executor;
+
+service OrderExecutorService {
+  rpc RequestVote (VoteRequest) returns (VoteResponse);
+  rpc AppendEntries (AppendEntriesRequest) returns (AppendEntriesResponse);
+  rpc GetStatus (StatusRequest) returns (StatusResponse);
+}
+
+message Empty {}
+
+message VoteRequest {
+  int32  term         = 1;
+  string candidate_id = 2;
+}
+
+message VoteResponse {
+  int32  term          = 1;
+  bool   vote_granted  = 2;
+  string responder_id  = 3;
+}
+
+message AppendEntriesRequest {
+  int32  term       = 1;
+  string leader_id  = 2;
+}
+
+message AppendEntriesResponse {
+  int32  term         = 1;
+  bool   success      = 2;
+  string responder_id = 3;
+}
+
+message StatusRequest {
+  Empty empty = 1;
+}
+
+message StatusResponse {
+  string node_id        = 1;
+  string role           = 2;
+  int32  current_term   = 3;
+  string leader_id      = 4;
+  repeated string peers = 5;
+}
