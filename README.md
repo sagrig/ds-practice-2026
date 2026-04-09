@@ -2,13 +2,25 @@
 
 This repository contains the initial code for the practice sessions of the Distributed Systems course at the University of Tartu.
 
-## Getting started
+## System Model
 
 ### Overview
 
-The code consists of multiple services. Each service is located in a separate folder. The `frontend` service folder contains a Dockerfile and the code for an example bookstore application. Each backend service folder (e.g. `orchestrator` or `fraud_detection`) contains a Dockerfile, a requirements.txt file and the source code of the service. During the practice sessions, you will implement the missing functionality in these backend services, or extend the backend with new services.
+The system is a distributed microservice system deployed with Docker Compose.
+The system architecture is client-server/service-oriented, where the `orchestrator` is the central coordinator.
+The frontend communicates with the `orchestrator` over HTTP, where backend services communicate using gRPC.
+The main backend services are: `fraud_detection`, `transaction_verification`, `suggestions`, `order_queue`, and `order_executor` nodes.
 
-There is also a `utils` folder that contains some helper code or specifications that are used by multiple services. Check the `utils` folder for more information.
+A `/checkout` request is implemented by first `orchestrator` receiving an order from frontend, calling the validation services and collecting their results.
+If the order is valid, it is forwarded to the `order_queue`.
+The queue decouples validation from later execution.
+One `order_executor` leader later dequeues and executes orders.
+The executors form a small replicated group and use a simplified Raft-style leader election, where only one node consumes from the queue at a time.
+
+The communication in-between backend services is synchronous RPC, because `orchestrator` waits for service responses before replying to the frontend.
+The system propagates vector clocks between services to track causal ordering of events.
+Failures are assumed to be crashes/timeouts/unreachable-node failure.
+If the leader executor crashes, another executor is elected, but if the queue restarts, the queued orders would be lost because they are stored in process' memory.
 
 ### Running the code with Docker Compose [recommended]
 
