@@ -5,7 +5,7 @@ import uuid
 
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
 
-# fraud detextion gRPC
+# fraud detection gRPC
 fraud_detection_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/fraud_detection'))
 sys.path.insert(0, fraud_detection_grpc_path)
 import fraud_detection_pb2      as fraud_detection
@@ -265,8 +265,8 @@ def checkout():
     stage2_errors  = []
 
     clock_after_a = merge_clock(global_clock, clock_a)
-    clock_for_c   = tick(clock_after_a, "orchestrator")
-    clock_for_d   = tick(clock_for_c, "orchestrator")
+    clock_for_c   = tick(global_clock, THIS_NODE)
+    clock_for_d   = tick(clock_for_c, THIS_NODE)
 
     def suggestions_init_worker():
         try:
@@ -328,7 +328,7 @@ def checkout():
     # e (after b and d)
     clock_for_e = merge_clock(clock_b, clock_d)
     clock_for_e = merge_clock(clock_for_e, global_clock)
-    clock_for_e = tick(clock_for_e, "orchestrator")
+    clock_for_e = tick(clock_for_e, THIS_NODE)
 
     # e = check_fraud
     try:
@@ -365,7 +365,6 @@ def checkout():
             "message": "Event f failed.",
             "details": str(e)
         }, 500
-
     global_clock = merge_clock(global_clock, f_result["vector_clock"])
 
     clock_for_queue = tick(global_clock, THIS_NODE)
@@ -377,7 +376,13 @@ def checkout():
             "message": "Queue enqueue failed.",
             "details": str(e)
         }, 500
-
+    if not queue_response.ok:
+        queue_response_fail = {
+            "code": "500",
+            "message": "Order could not be enqueued.",
+            "details": queue_response.message
+        }
+        return queue_response_fail, 500    
     global_clock = merge_clock(global_clock, dict(queue_response.vector_clock))
 
     order_status_response = {
