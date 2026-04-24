@@ -42,7 +42,7 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
         print("INFO: OrderQueue Enqueue request received:")
         print(f"Order ID: {request.order_id}")
         print(f"User:     {request.user}")
-        print(f"Items:    {list(request.items)}")
+        print(f"Items:    {[{'title': item.title, 'quantity': item.quantity} for item in request.items]}")
 
         clock_input = dict(request.vector_clock)
 
@@ -53,7 +53,10 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
             QUEUE.append({
                 "order_id":     request.order_id,
                 "user":         request.user,
-                "items":        list(request.items),
+                "items":        [
+                    {"title": item.title, "quantity": item.quantity}
+                    for item in request.items
+                ],
                 "vector_clock": local_clock
             })
 
@@ -98,14 +101,15 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
             message  = "Order dequeued successfully.",
             order_id = order_data["order_id"],
             user     = order_data["user"],
-            items    = order_data["items"]
         )
+        for item in order_data["items"]:
+            response.items.add(title=item["title"], quantity=item["quantity"])
         response.vector_clock.update(local_clock)
 
         print("INFO: OrderQueue Dequeue response sent.")
         print(f"Order ID: {response.order_id}")
         print(f"User:     {response.user}")
-        print(f"Items:    {list(response.items)}")
+        print(f"Items:    {[{'title': item.title, 'quantity': item.quantity} for item in response.items]}")
 
         return response
 

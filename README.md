@@ -9,7 +9,7 @@ This repository contains the initial code for the practice sessions of the Distr
 The system is a distributed microservice system deployed with Docker Compose.
 The system architecture is client-server/service-oriented, where the `orchestrator` is the central coordinator.
 The frontend communicates with the `orchestrator` over HTTP, where backend services communicate using gRPC.
-The main backend services are: `fraud_detection`, `transaction_verification`, `suggestions`, `order_queue`, and `order_executor` nodes.
+The main backend services are: `fraud_detection`, `transaction_verification`, `suggestions`, `order_queue`, replicated `books_database` nodes, and `order_executor` nodes.
 
 A `/checkout` request is implemented by first `orchestrator` receiving an order from frontend, calling the validation services and collecting their results.
 If the order is valid, it is forwarded to the `order_queue`.
@@ -21,6 +21,7 @@ The communication in-between backend services is synchronous RPC, because `orche
 The system propagates vector clocks between services to track causal ordering of events.
 Failures are assumed to be crashes/timeouts/unreachable-node failure.
 If the leader executor crashes, another executor is elected, but if the queue restarts, the queued orders would be lost because they are stored in process' memory.
+The books database is implemented as a primary-based replicated key-value store with three replicas. Reads and writes are serialized through the primary replica, and writes are only acknowledged after a majority of replicas have confirmed the update. This favors consistency over availability and gives the order execution flow a simple sequentially consistent stock view.
 
 ### Running the code with Docker Compose [recommended]
 
@@ -31,6 +32,8 @@ docker compose up
 ```
 
 This will start the system with the multiple services. Each service will be restarted automatically when you make changes to the code, so you don't have to restart the system manually while developing. If you want to know how the services are started and configured, check the `docker-compose.yaml` file.
+
+The Compose file now starts three `books_database` replicas by default (`books_db_1`, `books_db_2`, `books_db_3`). `books_db_1` acts as the primary replica and synchronously replicates committed writes to the backups.
 
 To run the replicated order executor with Raft-style leader election, scale it explicitly:
 

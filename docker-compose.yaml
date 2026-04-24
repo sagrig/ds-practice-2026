@@ -100,6 +100,54 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./order_queue/src:/app/order_queue/src
+  books_db_1:
+    build:
+      context: ./
+      dockerfile: ./books_database/Dockerfile
+    expose:
+      - "50056"
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/books_database/src/app.py
+      - BOOKS_DB_PORT=50056
+      - BOOKS_DB_REPLICA_NAME=books_db_1
+      - BOOKS_DB_PRIMARY_NAME=books_db_1
+      - BOOKS_DB_REPLICA_NAMES=books_db_1,books_db_2,books_db_3
+    volumes:
+      - ./utils:/app/utils
+      - ./books_database/src:/app/books_database/src
+  books_db_2:
+    build:
+      context: ./
+      dockerfile: ./books_database/Dockerfile
+    expose:
+      - "50056"
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/books_database/src/app.py
+      - BOOKS_DB_PORT=50056
+      - BOOKS_DB_REPLICA_NAME=books_db_2
+      - BOOKS_DB_PRIMARY_NAME=books_db_1
+      - BOOKS_DB_REPLICA_NAMES=books_db_1,books_db_2,books_db_3
+    volumes:
+      - ./utils:/app/utils
+      - ./books_database/src:/app/books_database/src
+  books_db_3:
+    build:
+      context: ./
+      dockerfile: ./books_database/Dockerfile
+    expose:
+      - "50056"
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/books_database/src/app.py
+      - BOOKS_DB_PORT=50056
+      - BOOKS_DB_REPLICA_NAME=books_db_3
+      - BOOKS_DB_PRIMARY_NAME=books_db_1
+      - BOOKS_DB_REPLICA_NAMES=books_db_1,books_db_2,books_db_3
+    volumes:
+      - ./utils:/app/utils
+      - ./books_database/src:/app/books_database/src
   order_executor:
     build:
       context: ./
@@ -111,6 +159,8 @@ services:
       - PYTHONFILE=/app/order_executor/src/app.py
       - ORDER_QUEUE_HOST=order_queue
       - ORDER_QUEUE_PORT=50054
+      - BOOKS_DB_HOST=books_db_1
+      - BOOKS_DB_PORT=50056
       - ORDER_EXECUTOR_SERVICE_NAME=order_executor
       - ORDER_EXECUTOR_PORT=50055
     volumes:
@@ -118,3 +168,6 @@ services:
       - ./order_executor/src:/app/order_executor/src
     depends_on:
       - order_queue
+      - books_db_1
+      - books_db_2
+      - books_db_3

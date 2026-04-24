@@ -7,10 +7,15 @@ service OrderQueueService {
   rpc Dequeue (DequeueRequest) returns (DequeueResponse);
 }
 
+message OrderItem {
+  string title    = 1;
+  int32  quantity = 2;
+}
+
 message EnqueueRequest {
   string             order_id     = 1;
   string             user         = 2;
-  repeated string    items        = 3;
+  repeated OrderItem items        = 3;
   map<string, int32> vector_clock = 4;
 }
 
@@ -29,6 +34,6 @@ message DequeueResponse {
   string             message      = 2;
   string             order_id     = 3;
   string             user         = 4;
-  repeated string    items        = 5;
+  repeated OrderItem items        = 5;
   map<string, int32> vector_clock = 6;
 }

@@ -143,11 +143,12 @@ def check_fraud(order_id, vector_clock):
 def enqueue_order(order_id, user, items, vector_clock):
     with grpc.insecure_channel('order_queue:50054') as channel:
         stub = order_queue_pb2_grpc.OrderQueueServiceStub(channel)
-        request = order_queue_pb2.EnqueueRequest(
-            order_id=order_id,
-            user=user,
-            items=items,
-        )
+        request = order_queue_pb2.EnqueueRequest(order_id=order_id, user=user)
+        for item in items:
+            request.items.add(
+                title=item["title"],
+                quantity=item["quantity"],
+            )
         request.vector_clock.update(vector_clock)
         response = stub.Enqueue(request)
     return response
@@ -194,10 +195,18 @@ def checkout():
 
     # extracting order info
     order_id           = str(uuid.uuid4())
-    items              = [item.get("name", "") for item in request_data.get("items", [])]
+    item_names         = [item.get("name", "") for item in request_data.get("items", [])]
+    queue_items        = [
+        {
+            "title": item.get("name", ""),
+            "quantity": int(item.get("quantity", 1) or 1),
+        }
+        for item in request_data.get("items", [])
+        if item.get("name")
+    ]
     user               = request_data.get("user", {}).get("name", "")
     card_number        = request_data.get("creditCard", {}).get("number", "")
-    order_amount_cents = len(request_data.get("items", [])) * 100
+    order_amount_cents = sum(item["quantity"] for item in queue_items) * 100
     invalid_disc       = (request_data.get("discountCode") == "INVALID")
 
     print(f"INFO: Generated Order ID: {order_id}")
@@ -213,7 +222,7 @@ def checkout():
 
     def transaction_init_worker():
         try:
-            stage1_results["a"] = init_transaction(order_id, user, items, clock_for_a)
+            stage1_results["a"] = init_transaction(order_id, user, item_names, clock_for_a)
         except Exception as e:
             stage1_errors.append(f"ERROR: Event a failed: {e}")
 
@@ -270,7 +279,7 @@ def checkout():
 
     def suggestions_init_worker():
         try:
-            stage2_results["c"] = init_suggestions(order_id, items, clock_for_c)
+            stage2_results["c"] = init_suggestions(order_id, item_names, clock_for_c)
         except Exception as e:
             stage2_errors.append(f"ERROR: Event c failed: {e}")
 
@@ -369,7 +378,7 @@ def checkout():
 
     clock_for_queue = tick(global_clock, THIS_NODE)
     try:
-        queue_response = enqueue_order(order_id, user, items, clock_for_queue)
+        queue_response = enqueue_order(order_id, user, queue_items, clock_for_queue)
     except Exception as e:
         return {
             "code":    "500",

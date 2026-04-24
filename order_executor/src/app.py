@@ -13,7 +13,11 @@ order_queue_grpc_path = os.path.abspath(os.path.join(FILE, "../../../utils/pb/or
 sys.path.insert(0, order_queue_grpc_path)
 order_executor_grpc_path = os.path.abspath(os.path.join(FILE, "../../../utils/pb/order_executor"))
 sys.path.insert(0, order_executor_grpc_path)
+books_database_grpc_path = os.path.abspath(os.path.join(FILE, "../../../utils/pb/books_database"))
+sys.path.insert(0, books_database_grpc_path)
 
+import books_database_pb2 as books_database
+import books_database_pb2_grpc as books_database_grpc
 import order_executor_pb2 as order_executor
 import order_executor_pb2_grpc as order_executor_grpc
 import order_queue_pb2 as order_queue
@@ -26,11 +30,14 @@ SERVICE_NAME = os.getenv("ORDER_EXECUTOR_SERVICE_NAME", "order_executor")
 SERVICE_PORT = int(os.getenv("ORDER_EXECUTOR_PORT", "50055"))
 ORDER_QUEUE_HOST = os.getenv("ORDER_QUEUE_HOST", "order_queue")
 ORDER_QUEUE_PORT = int(os.getenv("ORDER_QUEUE_PORT", "50054"))
+BOOKS_DB_HOST = os.getenv("BOOKS_DB_HOST", "books_db_1")
+BOOKS_DB_PORT = int(os.getenv("BOOKS_DB_PORT", "50056"))
 DISCOVERY_INTERVAL_SECONDS = float(os.getenv("ORDER_EXECUTOR_DISCOVERY_INTERVAL_SECONDS", "2"))
 HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("ORDER_EXECUTOR_HEARTBEAT_INTERVAL_SECONDS", "1"))
 WORKER_INTERVAL_SECONDS = float(os.getenv("ORDER_EXECUTOR_WORKER_INTERVAL_SECONDS", "2"))
 ELECTION_TIMEOUT_MIN_SECONDS = float(os.getenv("ORDER_EXECUTOR_ELECTION_TIMEOUT_MIN_SECONDS", "3"))
 ELECTION_TIMEOUT_MAX_SECONDS = float(os.getenv("ORDER_EXECUTOR_ELECTION_TIMEOUT_MAX_SECONDS", "5"))
+LEADER_LEASE_MULTIPLIER = float(os.getenv("ORDER_EXECUTOR_LEADER_LEASE_MULTIPLIER", "2.5"))
 
 
 def zero_clocks():
@@ -62,6 +69,7 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
         self.peers = []
         self.vector_clock = zero_clocks()
         self.election_deadline = 0.0
+        self.last_quorum_timestamp = 0.0
         self._reset_election_deadline()
 
     def RequestVote(self, request, context):
@@ -144,6 +152,7 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
         self.voted_for = ""
         self.role = "follower"
         self.leader_id = leader_id
+        self.last_quorum_timestamp = 0.0
         self._reset_election_deadline()
 
     def _discover_peer_ips(self):
@@ -226,6 +235,7 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
             if votes >= self._quorum_size(peers):
                 self.role = "leader"
                 self.leader_id = self.node_id
+                self.last_quorum_timestamp = time.monotonic()
                 print(
                     f"INFO: Node {self.node_id} became leader for term {self.current_term} "
                     f"with quorum {self._quorum_size(peers)}/{self._cluster_size(peers)}."
@@ -243,6 +253,7 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
                 peers = list(self.peers)
 
             if is_leader:
+                successful_responses = 1
                 for peer in peers:
                     try:
                         with grpc.insecure_channel(f"{peer}:{SERVICE_PORT}") as channel:
@@ -263,17 +274,33 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
                                 self._step_down(response.term, "")
                         break
 
+                    if response.success:
+                        successful_responses += 1
+                else:
+                    with self.lock:
+                        if (
+                            self.role == "leader"
+                            and self.current_term == heartbeat_term
+                            and successful_responses >= self._quorum_size(peers)
+                        ):
+                            self.last_quorum_timestamp = time.monotonic()
+
             time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
     def _worker_loop(self):
         while not self.stop_event.is_set():
             with self.lock:
                 is_leader = self.role == "leader"
+                has_quorum = self._has_active_quorum_locked()
 
-            if is_leader:
+            if is_leader and has_quorum:
                 self._attempt_dequeue()
 
             time.sleep(WORKER_INTERVAL_SECONDS)
+
+    def _has_active_quorum_locked(self):
+        lease_seconds = max(HEARTBEAT_INTERVAL_SECONDS * LEADER_LEASE_MULTIPLIER, HEARTBEAT_INTERVAL_SECONDS)
+        return (time.monotonic() - self.last_quorum_timestamp) <= lease_seconds
 
     def _attempt_dequeue(self):
         request_clock = tick(self.vector_clock, THIS_NODE)
@@ -296,6 +323,68 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
             f"INFO: Leader {self.node_id} dequeued order {response.order_id} for user {response.user}. "
             "Order is being executed..."
         )
+        self._execute_order(response.order_id, response.user, response.items)
+
+    def _execute_order(self, order_id, user, items):
+        requested_items = [
+            {"title": item.title, "quantity": item.quantity}
+            for item in items
+        ]
+
+        current_stocks = {}
+        for item in requested_items:
+            read_response = self._read_stock(item["title"])
+            if not read_response.ok:
+                print(
+                    f"WARNING: Order {order_id} for user {user} could not be executed because "
+                    f"book '{item['title']}' was not found in the books database."
+                )
+                return
+
+            current_stocks[item["title"]] = read_response.value
+
+        insufficient_books = [
+            item["title"]
+            for item in requested_items
+            if current_stocks[item["title"]] < item["quantity"]
+        ]
+        if insufficient_books:
+            print(
+                f"INFO: Order {order_id} for user {user} rejected due to insufficient stock for "
+                f"{', '.join(insufficient_books)}."
+            )
+            return
+
+        for item in requested_items:
+            new_stock = current_stocks[item["title"]] - item["quantity"]
+            write_response = self._write_stock(item["title"], new_stock)
+            if not write_response.ok:
+                print(
+                    f"WARNING: Order {order_id} for user {user} failed while writing stock for "
+                    f"'{item['title']}': {write_response.message}"
+                )
+                return
+
+        print(
+            f"INFO: Order {order_id} for user {user} executed successfully. "
+            f"Updated items: {requested_items}"
+        )
+
+    def _read_stock(self, title):
+        with grpc.insecure_channel(f"{BOOKS_DB_HOST}:{BOOKS_DB_PORT}") as channel:
+            stub = books_database_grpc.BooksDatabaseServiceStub(channel)
+            return stub.Read(books_database.ReadRequest(key=title), timeout=2)
+
+    def _write_stock(self, title, new_stock):
+        with grpc.insecure_channel(f"{BOOKS_DB_HOST}:{BOOKS_DB_PORT}") as channel:
+            stub = books_database_grpc.BooksDatabaseServiceStub(channel)
+            return stub.Write(
+                books_database.WriteRequest(
+                    key=title,
+                    value=new_stock,
+                ),
+                timeout=2,
+            )
 
 
 def serve():
