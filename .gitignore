@@ -1,1 +1,4 @@
 __pycache__
+utils/pb/**/*_pb2.py
+utils/pb/**/*_pb2_grpc.py
+utils/pb/**/*_pb2.pyi
