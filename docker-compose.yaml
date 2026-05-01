@@ -38,10 +38,16 @@ services:
       # Mount the orchestrator/src directory in the current directory to the /app/orchestrator/src directory in the container
       - ./orchestrator/src:/app/orchestrator/src
     depends_on:
-      - fraud_detection
-      - transaction_verification
-      - suggestions
-      - order_queue
+      proto_generator_oneshot:
+        condition: service_completed_successfully
+      fraud_detection:
+        condition: service_started
+      transaction_verification:
+        condition: service_started
+      suggestions:
+        condition: service_started
+      order_queue:
+        condition: service_started
   fraud_detection:
     build:
       # Use the current directory as the build context
@@ -64,6 +70,9 @@ services:
       - ./utils:/app/utils
       # Mount the fraud_detection/src directory in the current directory to the /app/fraud_detection/src directory in the container
       - ./fraud_detection/src:/app/fraud_detection/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   transaction_verification:
     build:
       context: ./
@@ -76,6 +85,9 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./transaction_verification/src:/app/transaction_verification/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   suggestions:
     build:
       context: ./
@@ -88,6 +100,9 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./suggestions/src:/app/suggestions/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   order_queue:
     build:
       context: ./
@@ -100,6 +115,9 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./order_queue/src:/app/order_queue/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   books_db_1:
     build:
       context: ./
@@ -116,6 +134,9 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./books_database/src:/app/books_database/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   books_db_2:
     build:
       context: ./
@@ -132,6 +153,9 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./books_database/src:/app/books_database/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   books_db_3:
     build:
       context: ./
@@ -148,6 +172,9 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./books_database/src:/app/books_database/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   order_executor:
     build:
       context: ./
@@ -167,7 +194,22 @@ services:
       - ./utils:/app/utils
       - ./order_executor/src:/app/order_executor/src
     depends_on:
-      - order_queue
-      - books_db_1
-      - books_db_2
-      - books_db_3
+      proto_generator_oneshot:
+        condition: service_completed_successfully
+      order_queue:
+        condition: service_started
+      books_db_1:
+        condition: service_started
+      books_db_2:
+        condition: service_started
+      books_db_3:
+        condition: service_started
+  proto_generator_oneshot:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./utils:/app/utils
+      - ./scripts:/app/scripts
+    command: >
+      sh -lc "pip install --no-cache-dir grpcio-tools &&
+              sh scripts/generate_protos.sh"
