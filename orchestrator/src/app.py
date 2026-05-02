@@ -50,7 +50,7 @@ def merge_clock(a, b):
     return merged
 
 # -- Initial RPC calls --
-def init_transaction(order_id, user, items, vector_clock):
+def init_transaction(order_id, user, items):
     with grpc.insecure_channel('transaction_verification:50052') as channel:
         stub    = tv_pb2_grpc.TransactionServiceStub(channel)
         request = tv_pb2.InitOrderRequest(
@@ -58,24 +58,20 @@ def init_transaction(order_id, user, items, vector_clock):
             user     = user,
             items    = items
         )
-        request.vector_clock.update(vector_clock)
-
         response = stub.InitOrder(request)
     return response
 
-def init_suggestions(order_id, items, vector_clock):
+def init_suggestions(order_id, items):
     with grpc.insecure_channel('suggestions:50053') as channel:
         stub    = s_pb2_grpc.SuggestionsServiceStub(channel)
         request = s_pb2.InitOrderRequest(
             order_id = order_id,
             items    = items
         )
-        request.vector_clock.update(vector_clock)
-
         response = stub.InitOrder(request)
     return response
 
-def init_fraud(order_id, card_number, order_amount_cents, vector_clock):
+def init_fraud(order_id, card_number, order_amount_cents):
     with grpc.insecure_channel('fraud_detection:50051') as channel:
         stub    = fraud_detection_grpc.FraudServiceStub(channel)
         request = fraud_detection.InitOrderRequest(
@@ -83,31 +79,27 @@ def init_fraud(order_id, card_number, order_amount_cents, vector_clock):
             card_number        = card_number,
             order_amount_cents = order_amount_cents
         )
-        request.vector_clock.update(vector_clock)
-
         response = stub.InitOrder(request)
     return response
 
 # -- Actual RPC calls --
-def verify_transaction(order_id, vector_clock):
+def verify_transaction(order_id):
     with grpc.insecure_channel('transaction_verification:50052') as channel:
         stub    = tv_pb2_grpc.TransactionServiceStub(channel)
         request = tv_pb2.TransactionRequest(
             order_id = order_id
         )
-        request.vector_clock.update(vector_clock)
 
         response = stub.VerifyTransaction(request)
     return response
 
-def get_suggestions(order_id, vector_clock):
+def get_suggestions(order_id):
     with grpc.insecure_channel('suggestions:50053') as channel:
         stub     = s_pb2_grpc.SuggestionsServiceStub(channel)
 
         request  = s_pb2.SuggestionsRequest(
             order_id = order_id
         )
-        request.vector_clock.update(vector_clock)
 
         response = stub.GetSuggestions(request)
 
@@ -120,27 +112,23 @@ def get_suggestions(order_id, vector_clock):
         })
 
     return {
-        "books":        books,
-        "vector_clock": dict(response.vector_clock)
+        "books":        books
     }
 
-def check_fraud(order_id, vector_clock):
+def check_fraud(order_id):
     with grpc.insecure_channel('fraud_detection:50051') as channel:
         stub = fraud_detection_grpc.FraudServiceStub(channel)
 
         request = fraud_detection.FraudRequest(
             order_id = order_id
         )
-        request.vector_clock.update(vector_clock)
-
         response = stub.CheckFraud(request)
     return {
-        "is_fraud":     response.is_fraud,
-        "vector_clock": dict(response.vector_clock)
+        "is_fraud":     response.is_fraud
     }
 
 
-def enqueue_order(order_id, user, items, vector_clock):
+def enqueue_order(order_id, user, items):
     with grpc.insecure_channel('order_queue:50054') as channel:
         stub = order_queue_pb2_grpc.OrderQueueServiceStub(channel)
         request = order_queue_pb2.EnqueueRequest(order_id=order_id, user=user)
@@ -149,7 +137,6 @@ def enqueue_order(order_id, user, items, vector_clock):
                 title=item["title"],
                 quantity=item["quantity"],
             )
-        request.vector_clock.update(vector_clock)
         response = stub.Enqueue(request)
     return response
 
@@ -211,24 +198,19 @@ def checkout():
 
     print(f"INFO: Generated Order ID: {order_id}")
 
-    global_clock = zero_clocks()
-
     # stage 1: a || b
     stage1_results = {}
     stage1_errors  = []
 
-    clock_for_a = tick(global_clock, THIS_NODE)
-    clock_for_b = tick(clock_for_a,  THIS_NODE)
-
     def transaction_init_worker():
         try:
-            stage1_results["a"] = init_transaction(order_id, user, item_names, clock_for_a)
+            stage1_results["a"] = init_transaction(order_id, user, item_names)
         except Exception as e:
             stage1_errors.append(f"ERROR: Event a failed: {e}")
 
     def fraud_init_worker():
         try:
-            stage1_results["b"] = init_fraud(order_id, card_number, order_amount_cents, clock_for_b)
+            stage1_results["b"] = init_fraud(order_id, card_number, order_amount_cents)
         except Exception as e:
             stage1_errors.append(f"ERROR: Event b failed: {e}")
 
@@ -263,29 +245,25 @@ def checkout():
             "suggestedBooks": []
         }, 200
 
-    clock_a = dict(stage1_results["a"].vector_clock)
-    clock_b = dict(stage1_results["b"].vector_clock)
-
-    global_clock = merge_clock(global_clock, clock_a)
-    global_clock = merge_clock(global_clock, clock_b)
+    order_status_response = {
+        "orderId":        order_id,
+        "status":         "Order Approved.",
+        "suggestedBooks": ["test"]
+    }
 
     # c || d (both after a)
     stage2_results = {}
     stage2_errors  = []
 
-    clock_after_a = merge_clock(global_clock, clock_a)
-    clock_for_c   = tick(global_clock, THIS_NODE)
-    clock_for_d   = tick(clock_for_c, THIS_NODE)
-
     def suggestions_init_worker():
         try:
-            stage2_results["c"] = init_suggestions(order_id, item_names, clock_for_c)
+            stage2_results["c"] = init_suggestions(order_id, item_names)
         except Exception as e:
             stage2_errors.append(f"ERROR: Event c failed: {e}")
 
     def transaction_verify_worker():
         try:
-            stage2_results["d"] = verify_transaction(order_id, clock_for_d)
+            stage2_results["d"] = verify_transaction(order_id)
         except Exception as e:
             stage2_errors.append(f"ERROR: Event d failed: {e}")
 
@@ -319,12 +297,6 @@ def checkout():
             "message": "Suggestions Initialisation event failed."
         }, 500
 
-    clock_c = dict(stage2_results["c"].vector_clock)
-    clock_d = dict(stage2_results["d"].vector_clock)
-
-    global_clock = merge_clock(global_clock, clock_c)
-    global_clock = merge_clock(global_clock, clock_d)
-
     tr_valid = stage2_results["d"].valid
 
     if not tr_valid or invalid_disc:
@@ -335,22 +307,16 @@ def checkout():
         }, 200
 
     # e (after b and d)
-    clock_for_e = merge_clock(clock_b, clock_d)
-    clock_for_e = merge_clock(clock_for_e, global_clock)
-    clock_for_e = tick(clock_for_e, THIS_NODE)
 
     # e = check_fraud
     try:
-        e_result = check_fraud(order_id, clock_for_e)
+        e_result = check_fraud(order_id)
     except Exception as e:
         return {
             "code":    "500",
             "message": "Event e failed.",
             "details": str(e)
         }, 500
-
-    clock_e      = e_result["vector_clock"]
-    global_clock = merge_clock(global_clock, clock_e)
 
     is_fraud = e_result["is_fraud"]
     if is_fraud:
@@ -361,24 +327,18 @@ def checkout():
         }, 200
 
     # f (after c and e)
-    clock_for_f = merge_clock(clock_c, clock_e)
-    clock_for_f = merge_clock(clock_for_f, global_clock)
-    clock_for_f = tick(clock_for_f, "orchestrator")
 
     # f = get_suggestions
     try:
-        f_result = get_suggestions(order_id, clock_for_f)
+        f_result = get_suggestions(order_id)
     except Exception as e:
         return {
             "code":    "500",
             "message": "Event f failed.",
             "details": str(e)
         }, 500
-    global_clock = merge_clock(global_clock, f_result["vector_clock"])
-
-    clock_for_queue = tick(global_clock, THIS_NODE)
     try:
-        queue_response = enqueue_order(order_id, user, queue_items, clock_for_queue)
+        queue_response = enqueue_order(order_id, user, queue_items)
     except Exception as e:
         return {
             "code":    "500",
@@ -392,8 +352,6 @@ def checkout():
             "details": queue_response.message
         }
         return queue_response_fail, 500    
-    global_clock = merge_clock(global_clock, dict(queue_response.vector_clock))
-
     order_status_response = {
         "orderId":        order_id,
         "status":         "Order Approved.",

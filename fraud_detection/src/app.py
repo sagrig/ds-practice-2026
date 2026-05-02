@@ -43,23 +43,16 @@ class FraudService(fraud_detection_grpc.FraudServiceServicer):
         print(f"Card:         {request.card_number}")
         print(f"Amount cents: {request.order_amount_cents}")
 
-        clock_input = dict(request.vector_clock)
-
         with LOCK:
-            local_clock = merge_clock(zero_clocks(), clock_input)
-            local_clock = tick(local_clock, THIS_NODE)
-
             ORDERS[request.order_id] = {
                 "card_number":        request.card_number,
-                "order_amount_cents": request.order_amount_cents,
-                "vector_clock":       local_clock
+                "order_amount_cents": request.order_amount_cents
             }
 
         response = fraud_detection.InitOrderResponse(
             ok      = True,
             message = "Fraud service initialized order."
         )
-        response.vector_clock.update(local_clock)
 
         print("INFO: Fraud InitOrder response sent.")
         return response
@@ -73,14 +66,9 @@ class FraudService(fraud_detection_grpc.FraudServiceServicer):
                 print("ERROR: Unknown order_id in fraud service.")
 
                 response = fraud_detection.FraudResponse(is_fraud=True)
-                response.vector_clock.update(zero_clocks())
                 return response
 
             order_state = ORDERS[request.order_id]
-
-            local_clock = merge_clock(order_state["vector_clock"], dict(request.vector_clock))
-            local_clock = tick(local_clock, THIS_NODE)
-            order_state["vector_clock"] = local_clock
 
             card_number        = order_state["card_number"]
             order_amount_cents = order_state["order_amount_cents"]
@@ -94,7 +82,6 @@ class FraudService(fraud_detection_grpc.FraudServiceServicer):
         )
 
         response = fraud_detection.FraudResponse(is_fraud=is_fraud)
-        response.vector_clock.update(local_clock)
 
         print("INFO: Fraud Service response:")
         print(f"Fraud result: {response.is_fraud}")

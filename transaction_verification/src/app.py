@@ -14,9 +14,6 @@ import transaction_verification_pb2_grpc as tv_pb2_grpc
 NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
 THIS_NODE = "transaction"
 
-ORDERS    = {}
-LOCK      = threading.Lock()
-
 # -- VECTOR CLOCK API --
 def zero_clocks():
     return {node: 0 for node in NODES}
@@ -34,29 +31,26 @@ def merge_clock(a, b):
 
 # -- Transaction Service API --
 class TransactionService(tv_pb2_grpc.TransactionServiceServicer):
+    def __init__(self):
+        self.orders = {}
+        self.lock = threading.Lock()
+        
     def InitOrder(self, request, context):
         print("INFO: Transaction InitOrder request received:")
         print(f"Order ID: {request.order_id}")
         print(f"User:     {request.user}")
         print(f"Items:    {list(request.items)}")
 
-        clock_input = dict(request.vector_clock)
-
-        with LOCK:
-            local_clock = merge_clock(zero_clocks(), clock_input)
-            local_clock = tick(local_clock, THIS_NODE)
-
-            ORDERS[request.order_id] = {
+        with self.lock:
+            self.orders[request.order_id] = {
                 "user":         request.user,
-                "items":        list(request.items),
-                "vector_clock": local_clock
+                "items":        list(request.items)
             }
         
         response = tv_pb2.InitOrderResponse(
             ok = True,
             message = f"Transaction service initialised order {request.order_id}"            
         )
-        response.vector_clock.update(local_clock)
 
         print("INFO: Transaction InitOrder response sent.")
         return response
@@ -65,22 +59,16 @@ class TransactionService(tv_pb2_grpc.TransactionServiceServicer):
         print("INFO: Transaction verification request received:")
         print(f"Order ID:  {request.order_id}")
 
-        with LOCK:
-            if request.order_id not in ORDERS:
+        with self.lock:
+            if request.order_id not in self.orders:
                 print("ERROR: unknown order_id in transaction service.")
 
                 response = tv_pb2.TransactionResponse(
                     valid = False
                 )
-                response.vector_clock.update(zero_clocks())
                 return response
 
-            order_state = ORDERS[request.order_id]
-
-            local_clock = merge_clock(order_state["vector_clock"],
-                                      dict(request.vector_clock))
-            local_clock = tick(local_clock, THIS_NODE)
-            order_state["vector_clock"] = local_clock
+            order_state = self.orders[request.order_id]
 
             user  = order_state["user"]
             items = order_state["items"]
@@ -93,7 +81,6 @@ class TransactionService(tv_pb2_grpc.TransactionServiceServicer):
         response = tv_pb2.TransactionResponse(
             valid = valid
         )
-        response.vector_clock.update(local_clock)
 
         print("INFO: Transaction verification response:")
         print(f"Valid: {response.valid}")

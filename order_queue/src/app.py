@@ -44,11 +44,8 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
         print(f"User:     {request.user}")
         print(f"Items:    {[{'title': item.title, 'quantity': item.quantity} for item in request.items]}")
 
-        clock_input = dict(request.vector_clock)
 
         with LOCK:
-            local_clock = merge_clock(zero_clocks(), clock_input)
-            local_clock = tick(local_clock, THIS_NODE)
 
             QUEUE.append({
                 "order_id":     request.order_id,
@@ -56,15 +53,13 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
                 "items":        [
                     {"title": item.title, "quantity": item.quantity}
                     for item in request.items
-                ],
-                "vector_clock": local_clock
+                ]
             })
 
         response = order_queue.EnqueueResponse(
             ok      = True,
             message = "Order enqueued successfully."
         )
-        response.vector_clock.update(local_clock)
 
         print("INFO: OrderQueue Enqueue response sent.")
         return response
@@ -72,13 +67,8 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
     def Dequeue(self, request, context):
         print("INFO: OrderQueue Dequeue request received.")
 
-        clock_input = dict(request.vector_clock)
-
         with LOCK:
-            base_clock = merge_clock(zero_clocks(), clock_input)
-
             if not QUEUE:
-                local_clock = tick(base_clock, THIS_NODE)
 
                 response = order_queue.DequeueResponse(
                     ok      = False,
@@ -86,15 +76,10 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
                     order_id = "",
                     user     = ""
                 )
-                response.vector_clock.update(local_clock)
-
                 print("INFO: Queue is empty.")
                 return response
 
             order_data = QUEUE.popleft()
-
-            local_clock = merge_clock(order_data["vector_clock"], base_clock)
-            local_clock = tick(local_clock, THIS_NODE)
 
         response = order_queue.DequeueResponse(
             ok       = True,
@@ -104,7 +89,6 @@ class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):
         )
         for item in order_data["items"]:
             response.items.add(title=item["title"], quantity=item["quantity"])
-        response.vector_clock.update(local_clock)
 
         print("INFO: OrderQueue Dequeue response sent.")
         print(f"Order ID: {response.order_id}")

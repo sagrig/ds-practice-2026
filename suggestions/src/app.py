@@ -14,9 +14,6 @@ import suggestions_pb2_grpc as s_pb2_grpc
 NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
 THIS_NODE = "suggestions"
 
-ORDERS    = {}
-LOCK      = threading.Lock()
-
 # -- VECTOR CLOCK API --
 def zero_clocks():
     return {node: 0 for node in NODES}
@@ -34,28 +31,25 @@ def merge_clock(a, b):
 
 # -- Suggestions Service API --
 class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
+    def __init__(self):
+        self.orders = {}
+        self.lock   = threading.Lock()
 
     def InitOrder(self, request, context):
         print("INFO: Suggestions InitOrder request received:")
         print(f"Order ID: {request.order_id}")
         print(f"Items:    {list(request.items)}")
 
-        clock_input = dict(request.vector_clock)
 
-        with LOCK:
-            local_clock = merge_clock(zero_clocks(), clock_input)
-            local_clock = tick(local_clock, THIS_NODE)
-
-            ORDERS[request.order_id] = {
-                "items":        list(request.items),
-                "vector_clock": local_clock
+        with self.lock:
+            self.orders[request.order_id] = {
+                "items":        list(request.items)
             }
 
         response = s_pb2.InitOrderResponse(
             ok      = True,
             message = "Suggestions service initialized order."
         )
-        response.vector_clock.update(local_clock)
 
         print("INFO: Suggestions InitOrder response sent.")
         return response
@@ -66,19 +60,12 @@ class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
         print("INFO: Suggestions request received:")
         print(f"Order ID: {request.order_id}")
 
-        with LOCK:
-            if request.order_id not in ORDERS:
+        with self.lock:
+            if request.order_id not in self.orders:
                 print("ERROR: Unknown order_id in suggestions service.")
-                response.vector_clock.update(zero_clocks())
                 return response
 
-            order_state = ORDERS[request.order_id]
-
-            local_clock = merge_clock(order_state["vector_clock"], 
-                                      dict(request.vector_clock))
-            local_clock = tick(local_clock, THIS_NODE)
-            order_state["vector_clock"] = local_clock
-
+            order_state = self.orders[request.order_id]
             items = order_state["items"]  
         print(f"INFO: Cached items: {items}")
 
@@ -95,8 +82,6 @@ class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
             book.bookId = b["bookId"]
             book.title  = b["title"]
             book.author = b["author"]
-
-        response.vector_clock.update(local_clock)
 
         print("INFO: Suggestions response:")
         print(f"Suggestions book number: {len(response.books)}")

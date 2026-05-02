@@ -10,18 +10,15 @@ service SuggestionsService {
 message InitOrderRequest {
   string             order_id     = 1;
   repeated string    items        = 2;
-  map<string, int32> vector_clock = 3;
 }
 
 message InitOrderResponse {
   bool               ok           = 1;
   string             message      = 2;
-  map<string, int32> vector_clock = 3;
 }
 
 message SuggestionsRequest {
   string             order_id     = 1;
-  map<string, int32> vector_clock = 2;
 }
 
 message Book {
@@ -32,5 +29,4 @@ message Book {
 
 message SuggestionsResponse {
   repeated Book      books        = 1;
-  map<string, int32> vector_clock = 2;
 }

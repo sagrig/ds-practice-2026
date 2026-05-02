@@ -39,24 +39,6 @@ ELECTION_TIMEOUT_MIN_SECONDS = float(os.getenv("ORDER_EXECUTOR_ELECTION_TIMEOUT_
 ELECTION_TIMEOUT_MAX_SECONDS = float(os.getenv("ORDER_EXECUTOR_ELECTION_TIMEOUT_MAX_SECONDS", "5"))
 LEADER_LEASE_MULTIPLIER = float(os.getenv("ORDER_EXECUTOR_LEADER_LEASE_MULTIPLIER", "2.5"))
 
-
-def zero_clocks():
-    return {node: 0 for node in NODES}
-
-
-def tick(clock, node):
-    new_clock = dict(clock)
-    new_clock[node] = new_clock.get(node, 0) + 1
-    return new_clock
-
-
-def merge_clock(a, b):
-    merged = {}
-    for node in NODES:
-        merged[node] = max(a.get(node, 0), b.get(node, 0))
-    return merged
-
-
 class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
     def __init__(self):
         self.lock = threading.RLock()
@@ -67,7 +49,6 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
         self.role = "follower"
         self.leader_id = ""
         self.peers = []
-        self.vector_clock = zero_clocks()
         self.election_deadline = 0.0
         self.last_quorum_timestamp = 0.0
         self._reset_election_deadline()
@@ -303,18 +284,14 @@ class RaftExecutor(order_executor_grpc.OrderExecutorServiceServicer):
         return (time.monotonic() - self.last_quorum_timestamp) <= lease_seconds
 
     def _attempt_dequeue(self):
-        request_clock = tick(self.vector_clock, THIS_NODE)
         try:
             with grpc.insecure_channel(f"{ORDER_QUEUE_HOST}:{ORDER_QUEUE_PORT}") as channel:
                 stub = order_queue_grpc.OrderQueueServiceStub(channel)
                 request = order_queue.DequeueRequest()
-                request.vector_clock.update(request_clock)
                 response = stub.Dequeue(request, timeout=2)
         except grpc.RpcError as error:
             print(f"WARNING: Leader {self.node_id} failed to reach order_queue: {error}")
             return
-
-        self.vector_clock = merge_clock(request_clock, dict(response.vector_clock))
 
         if not response.ok:
             return
