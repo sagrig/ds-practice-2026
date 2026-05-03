@@ -15,26 +15,9 @@ sys.path.insert(0, order_queue_grpc_path)
 import order_queue_pb2      as order_queue
 import order_queue_pb2_grpc as order_queue_grpc
 
-NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue", "order_executor"]
-THIS_NODE = "order_queue"
-
 QUEUE     = deque()
 LOCK      = threading.Lock()
 
-# -- VECTOR CLOCK API --
-def zero_clocks():
-    return {node: 0 for node in NODES}
-
-def tick(clock, node):
-    new_clock = dict(clock)
-    new_clock[node] = new_clock.get(node, 0) + 1
-    return new_clock
-
-def merge_clock(a, b):
-    merged = {}
-    for node in NODES:
-        merged[node] = max(a.get(node, 0), b.get(node, 0))
-    return merged
 
 # -- Order Queue Service API --
 class OrderQueueService(order_queue_grpc.OrderQueueServiceServicer):

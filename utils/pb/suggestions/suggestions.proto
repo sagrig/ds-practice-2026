@@ -1,9 +1,11 @@
 syntax = "proto3";
 
 package suggestions;
+import "google/protobuf/empty.proto";
+
 
 service SuggestionsService {
-  rpc InitOrder      (InitOrderRequest)   returns (InitOrderResponse);
+  rpc InitOrder      (InitOrderRequest)   returns (google.protobuf.Empty);
   rpc GetSuggestions (SuggestionsRequest) returns (SuggestionsResponse);
 }
 
@@ -12,13 +14,9 @@ message InitOrderRequest {
   repeated string    items        = 2;
 }
 
-message InitOrderResponse {
-  bool               ok           = 1;
-  string             message      = 2;
-}
-
 message SuggestionsRequest {
   string             order_id     = 1;
+  map<string, int32> vector_clock = 2;
 }
 
 message Book {
@@ -28,5 +26,8 @@ message Book {
 }
 
 message SuggestionsResponse {
-  repeated Book      books        = 1;
+  string             order_id     = 1;
+  repeated Book      books        = 2;
+  map<string, int32> vector_clock = 3;
+  bool failed = 4;
 }

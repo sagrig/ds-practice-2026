@@ -23,9 +23,6 @@ import order_executor_pb2_grpc as order_executor_grpc
 import order_queue_pb2 as order_queue
 import order_queue_pb2_grpc as order_queue_grpc
 
-THIS_NODE = "order_executor"
-NODES = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue", "order_executor"]
-
 SERVICE_NAME = os.getenv("ORDER_EXECUTOR_SERVICE_NAME", "order_executor")
 SERVICE_PORT = int(os.getenv("ORDER_EXECUTOR_PORT", "50055"))
 ORDER_QUEUE_HOST = os.getenv("ORDER_QUEUE_HOST", "order_queue")

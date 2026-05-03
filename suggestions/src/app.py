@@ -1,8 +1,12 @@
 import sys
 import os
+from urllib import request
 import grpc
 import threading
 from concurrent import futures
+
+from google.protobuf import empty_pb2
+
 
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
 grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/suggestions'))
@@ -11,27 +15,12 @@ sys.path.insert(0, grpc_path)
 import suggestions_pb2 as s_pb2
 import suggestions_pb2_grpc as s_pb2_grpc
 
-NODES     = ["orchestrator", "transaction", "fraud", "suggestions", "order_queue"]
-THIS_NODE = "suggestions"
-
-# -- VECTOR CLOCK API --
-def zero_clocks():
-    return {node: 0 for node in NODES}
-
-def tick(clock, node):
-    new_clock = dict(clock)
-    new_clock[node] = new_clock.get(node, 0) + 1
-    return new_clock
-
-def merge_clock(a, b):
-    merged = {}
-    for node in NODES:
-        merged[node] = max(a.get(node, 0), b.get(node, 0))
-    return merged
 
 # -- Suggestions Service API --
 class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
     def __init__(self):
+        self.NODES = ["transaction", "fraud", "suggestions"]
+        self.THIS_NODE = "suggestions"
         self.orders = {}
         self.lock   = threading.Lock()
 
@@ -43,32 +32,25 @@ class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
 
         with self.lock:
             self.orders[request.order_id] = {
-                "items":        list(request.items)
+                "items":        list(request.items),
+                "order_clock":  self.zero_clocks()
             }
-
-        response = s_pb2.InitOrderResponse(
-            ok      = True,
-            message = "Suggestions service initialized order."
-        )
-
         print("INFO: Suggestions InitOrder response sent.")
-        return response
+        return empty_pb2.Empty()
     
+    # event (f) – generate suggestions based on items
     def GetSuggestions(self, request, context):
-        response = s_pb2.SuggestionsResponse()
-
         print("INFO: Suggestions request received:")
-        print(f"Order ID: {request.order_id}")
 
+        response = s_pb2.SuggestionsResponse()
         with self.lock:
-            if request.order_id not in self.orders:
-                print("ERROR: Unknown order_id in suggestions service.")
-                return response
-
-            order_state = self.orders[request.order_id]
-            items = order_state["items"]  
-        print(f"INFO: Cached items: {items}")
-
+            ingress_clock = dict(request.vector_clock)
+            print(f"INFO: Suggestions ingress vector clock: {ingress_clock} for order_id: {request.order_id}")            
+            order = self.orders.get(request.order_id)   
+            order["order_clock"] = self.merge_clocks(order["order_clock"], ingress_clock)
+            order["order_clock"] = self.tick_clock(order["order_clock"])
+            print(f"INFO: Suggestions updated vector clock: {order['order_clock']} for order_id: {request.order_id}")
+            failed = False
         # static book list
         books = [
             {"bookId": "101", "title": "Clean Code",               "author": "Robert C. Martin"},
@@ -82,10 +64,24 @@ class SuggestionsService(s_pb2_grpc.SuggestionsServiceServicer):
             book.bookId = b["bookId"]
             book.title  = b["title"]
             book.author = b["author"]
+        response.vector_clock.update(order["order_clock"])
+        response.failed = failed
 
-        print("INFO: Suggestions response:")
-        print(f"Suggestions book number: {len(response.books)}")
         return response
+    
+    def zero_clocks(self):
+        return {node: 0 for node in self.NODES}
+
+    def merge_clocks(self, local, ingress):
+        merged = {}
+        for node in self.NODES:
+            merged[node] = max(local.get(node, 0), ingress.get(node, 0))
+        return merged
+    
+    def tick_clock(self, clock):
+        new_clock = dict(clock)
+        new_clock[self.THIS_NODE] = new_clock.get(self.THIS_NODE, 0) + 1
+        return new_clock
 
 
 def serve():

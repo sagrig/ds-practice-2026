@@ -1,27 +1,40 @@
 syntax = "proto3";
 
 package fraud_detection;
+import "google/protobuf/empty.proto";
+
 
 service FraudService {
-    rpc InitOrder  (InitOrderRequest) returns (InitOrderResponse);
-    rpc CheckFraud (FraudRequest)     returns (FraudResponse);
+    rpc InitOrder  (InitOrderRequest) returns (google.protobuf.Empty);
+    rpc CheckUserFraud (CheckUserFraudRequest)     returns (CheckUserFraudResponse);
+    rpc CheckCardFraud (CheckCardFraudRequest)     returns (CheckCardFraudResponse);
 }
 
 message InitOrderRequest {
     string             order_id           = 1;
-    string             card_number        = 2;
-    int32              order_amount_cents = 3;
+    string             user               = 2;
+    string             card_number        = 3;
+    int32              order_amount_cents = 4;
 };
 
-message InitOrderResponse {
-    bool               ok           = 1;
-    string             message      = 2;
-}
-
-message FraudRequest {
+message CheckUserFraudRequest {
     string             order_id     = 1;
+    map<string, int32> vector_clock = 2;
 }
 
-message FraudResponse {
-	bool               is_fraud     = 1;
+message CheckUserFraudResponse {
+    string             order_id     = 1;
+	map<string, int32> vector_clock = 2;
+    bool failed = 3;
+}
+
+message CheckCardFraudRequest {
+    string             order_id     = 1;
+    map<string, int32> vector_clock = 2;
+}
+
+message CheckCardFraudResponse {
+    string             order_id     = 1;
+	map<string, int32> vector_clock = 2;
+    bool failed = 3;
 }

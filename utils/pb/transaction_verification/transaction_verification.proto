@@ -1,27 +1,52 @@
 syntax = "proto3";
 
 package transaction_verification;
+import "google/protobuf/empty.proto";
+
 
 service TransactionService {
-  rpc InitOrder         (InitOrderRequest) returns (InitOrderResponse);
-  rpc VerifyTransaction (TransactionRequest) returns (TransactionResponse);
+  rpc InitOrder         (InitOrderRequest) returns (google.protobuf.Empty);
+  rpc VerifyItems       (VerifyItemsRequest) returns (VerifyItemsResponse);
+  rpc VerifyUserData    (VerifyUserDataRequest) returns (VerifyUserDataResponse);
+  rpc VerifyCreditCard  (VerifyCreditCardRequest) returns (VerifyCreditCardResponse);
 }
 
 message InitOrderRequest {
-  string             order_id     = 1;
+  string             order_id     = 1;  
   string             user         = 2;
-  repeated string    items        = 3;
+  string card_number = 3;
+  repeated string    items        = 4;
 }
 
-message InitOrderResponse {
-  bool               ok           = 1;
-  string             message      = 2;
+message VerifyItemsRequest {
+  string order_id = 1;
+  map<string, int32> vector_clock = 2;
 }
 
-message TransactionRequest {
-  string             order_id     = 1;
+message VerifyItemsResponse {
+  string order_id = 1;
+  map<string, int32> vector_clock = 2;
+  bool failed = 3;
 }
 
-message TransactionResponse {
-  bool               valid        = 1;
+message VerifyUserDataRequest {
+  string order_id = 1;
+  map<string, int32> vector_clock = 2;
+}
+
+message VerifyUserDataResponse {
+  string order_id = 1;
+  map<string, int32> vector_clock = 2;
+  bool failed = 3;
+}
+
+message VerifyCreditCardRequest {
+  string order_id = 1;
+  map<string, int32> vector_clock = 2;
+}
+
+message VerifyCreditCardResponse {
+  string order_id = 1;
+  map<string, int32> vector_clock = 2;
+  bool failed = 3;
 }
