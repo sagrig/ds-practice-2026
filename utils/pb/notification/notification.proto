@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package notification;
+
+service NotificationService {
+  rpc Prepare (PrepareRequest) returns (PrepareResponse);
+  rpc Commit (CommitRequest) returns (CommitResponse);
+  rpc Abort  (AbortRequest) returns (AbortResponse);
+}
+
+message PrepareRequest {
+  string transaction_id = 1;
+  string order_id = 2;
+  string user = 3;
+  string message = 4;
+}
+
+message PrepareResponse {
+  bool   ready   = 1;
+  string message = 2;
+}
+
+message CommitRequest {
+  string transaction_id = 1;
+  string order_id = 2;
+}
+
+message CommitResponse {
+  bool   success = 1;
+  string message = 2;
+}
+
+message AbortRequest {
+  string transaction_id = 1;
+  string order_id = 2;
+}
+
+message AbortResponse {
+  bool   aborted = 1;
+  string message = 2;
+}

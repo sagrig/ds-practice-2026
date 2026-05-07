@@ -175,6 +175,38 @@ services:
     depends_on:
       proto_generator_oneshot:
         condition: service_completed_successfully
+  payment:
+    build:
+      context: ./
+      dockerfile: ./payment/Dockerfile
+    ports:
+      - 50057:50057
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/payment/src/app.py
+      - PAYMENT_TRANSACTION_LOG_PATH=/var/lib/payment/transactions.jsonl
+    volumes:
+      - ./utils:/app/utils
+      - ./payment/src:/app/payment/src
+      - payment_state:/var/lib/payment
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
+  notification:
+    build:
+      context: ./
+      dockerfile: ./notification/Dockerfile
+    ports:
+      - 50058:50058
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/notification/src/app.py
+    volumes:
+      - ./utils:/app/utils
+      - ./notification/src:/app/notification/src
+    depends_on:
+      proto_generator_oneshot:
+        condition: service_completed_successfully
   order_executor:
     build:
       context: ./
@@ -188,6 +220,10 @@ services:
       - ORDER_QUEUE_PORT=50054
       - BOOKS_DB_HOST=books_db_1
       - BOOKS_DB_PORT=50056
+      - PAYMENT_HOST=payment
+      - PAYMENT_PORT=50057
+      - NOTIFICATION_HOST=notification
+      - NOTIFICATION_PORT=50058
       - ORDER_EXECUTOR_SERVICE_NAME=order_executor
       - ORDER_EXECUTOR_PORT=50055
     volumes:
@@ -204,6 +240,10 @@ services:
         condition: service_started
       books_db_3:
         condition: service_started
+      payment:
+        condition: service_started
+      notification:
+        condition: service_started
   proto_generator_oneshot:
     image: python:3.11-slim
     working_dir: /app
@@ -213,3 +253,6 @@ services:
     command: >
       sh -lc "pip install --no-cache-dir grpcio-tools &&
               sh scripts/generate_protos.sh"
+
+volumes:
+  payment_state:

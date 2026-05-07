@@ -356,6 +356,14 @@ def checkout():
                 return
             
             with lock:
+                results["suggestedBooks"] = [
+                    {
+                        "bookId": book.bookId,
+                        "title": book.title,
+                        "author": book.author,
+                    }
+                    for book in f_res.books
+                ]
                 results["f"] = "Order ID: {}\n Vector Clock: {}\n Fail state: {}\n Suggested Books: {}".format(
                     f_res.order_id, f_res.vector_clock, f_res.failed, [book.title for book in f_res.books]
                 )
@@ -428,7 +436,7 @@ def checkout():
     order_status_response = {
         "orderId":        order_id,
         "status":         "Order Approved.",
-        "suggestedBooks": []
+        "suggestedBooks": results.get("suggestedBooks", [])
     }
     return order_status_response, 200
 

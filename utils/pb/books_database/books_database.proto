@@ -7,6 +7,9 @@ service BooksDatabaseService {
   rpc Write (WriteRequest) returns (WriteResponse);
   rpc ReplicateWrite (ReplicateWriteRequest) returns (ReplicateWriteResponse);
   rpc GetStatus (StatusRequest) returns (StatusResponse);
+  rpc Prepare (PrepareRequest) returns (PrepareResponse);
+  rpc Commit (CommitRequest) returns (CommitResponse);
+  rpc Abort (AbortRequest) returns (AbortResponse);
 }
 
 message ReadRequest {
@@ -55,4 +58,33 @@ message StatusResponse {
   bool   is_primary   = 2;
   string primary_name = 3;
   repeated string peers = 4;
+}
+
+message PrepareRequest {
+  string transaction_id = 1;
+  string key = 2;
+  int32  value = 3;
+}
+
+message PrepareResponse {
+  bool   ready   = 1;
+  string message = 2;
+}
+
+message CommitRequest {
+  string transaction_id = 1;
+}
+
+message CommitResponse {
+  bool   success = 1;
+  string message = 2;
+}
+
+message AbortRequest {
+  string transaction_id = 1;
+}
+
+message AbortResponse {
+  bool   aborted = 1;
+  string message = 2;
 }
